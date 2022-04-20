@@ -11,14 +11,40 @@ var (
 	inited int32
 )
 
-type Option func()
+type Option func() error
 
-type context struct {
-	stop func() error
+type PIDFile struct {
+	inited int32
+	path   string
 }
 
-func (c *context) Stop() error {
-	return c.stop()
+func New(path string, options ...Option) (*PIDFile, error) {
+	for _, option := range options {
+		if err := option(); err != nil {
+			return nil, err
+		}
+	}
+	return &PIDFile{
+		path: path,
+	}, nil
+}
+func (pf *PIDFile) Generate() error {
+	if !atomic.CompareAndSwapInt32(&pf.inited, 0, 1) {
+		return errors.New("duplicated")
+	} else if _, err := os.Stat(pf.path); errors.Is(err, os.ErrExist) {
+		return os.ErrExist
+	}
+	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	f.WriteString(strconv.Itoa(os.Getpid()))
+	return nil
+}
+func (pf *PIDFile) Cleanup() error {
+	defer atomic.StoreInt32(&pf.inited, 0)
+	return os.Remove(pf.path)
 }
 
 const (
@@ -26,32 +52,24 @@ const (
 )
 
 func Permission(uid int) Option {
-	return func() {
+	return func() error {
 		if os.Getuid() != uid {
-			panic(errors.New("expect uid:" + strconv.Itoa(uid)))
+			return errors.New("expect uid:" + strconv.Itoa(uid))
 		}
+		return nil
 	}
 }
 
-func Start(path string, options ...Option) interface {
-	Stop() error
+func Generate(path string, options ...Option) interface {
+	Cleanup() error
 } {
-	if !atomic.CompareAndSwapInt32(&inited, 0, 1) {
-		panic(errors.New("duplicated"))
-	}
-	for _, option := range options {
-		option()
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	c, err := New(path, options...)
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
-	c := new(context)
-	c.stop = func() error {
-		defer atomic.StoreInt32(&inited, 0)
-		return os.Remove(path)
+	err = c.Generate()
+	if err != nil {
+		panic(err)
 	}
-	f.WriteString(strconv.Itoa(os.Getpid()))
 	return c
 }
