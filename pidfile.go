@@ -43,8 +43,11 @@ func (pf *PIDFile) Generate() error {
 	return nil
 }
 func (pf *PIDFile) Cleanup() error {
-	defer atomic.StoreInt32(&pf.inited, 0)
-	return os.Remove(pf.path)
+	if pf != nil {
+		defer atomic.StoreInt32(&pf.inited, 0)
+		return os.Remove(pf.path)
+	}
+	return nil
 }
 
 const (
@@ -60,9 +63,16 @@ func Permission(uid int) Option {
 	}
 }
 
+var (
+	emptyPF *PIDFile
+)
+
 func Generate(path string, options ...Option) interface {
 	Cleanup() error
 } {
+	if path == "" {
+		return emptyPF
+	}
 	c, err := New(path, options...)
 	if err != nil {
 		panic(err)
