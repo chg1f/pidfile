@@ -7,10 +7,6 @@ import (
 	"sync/atomic"
 )
 
-var (
-	inited int32
-)
-
 type Option func() error
 
 type PIDFile struct {

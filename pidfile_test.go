@@ -4,13 +4,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 )
 
 func TestPIDFile(t *testing.T) {
-	// path := filepath.Join(os.TempDir(), "pidfile")
-	path := "./pidfile"
+	path := filepath.Join(os.TempDir(), "pidfile")
 	c, err := New(path)
 	if err != nil {
 		t.Error(err)
@@ -49,10 +49,14 @@ func ExamplePIDFile() {
 		panic(err)
 	}
 	defer pf.Cleanup()
+
+	// ...
+
+	// Output:
 }
 
 func TestGenerate(t *testing.T) {
-	path := "./pidfile"
+	path := filepath.Join(os.TempDir(), "pidfile")
 	c := Generate(path)
 	f, err := os.Open(path)
 	if err != nil {
@@ -77,4 +81,8 @@ func TestGenerate(t *testing.T) {
 
 func ExampleGenerate() {
 	defer Generate("/var/run/example/pidfile").Cleanup()
+
+	// ...
+
+	// Output:
 }
