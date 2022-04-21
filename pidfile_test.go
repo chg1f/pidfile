@@ -41,7 +41,7 @@ func TestPIDFile(t *testing.T) {
 }
 
 func ExamplePIDFile() {
-	pf, err := New("/var/run/example/pidfile")
+	pf, err := New("./pidfile")
 	if err != nil {
 		panic(err)
 	}
@@ -49,7 +49,6 @@ func ExamplePIDFile() {
 		panic(err)
 	}
 	defer pf.Cleanup()
-
 	// ...
 
 	// Output:
@@ -80,8 +79,7 @@ func TestGenerate(t *testing.T) {
 }
 
 func ExampleGenerate() {
-	defer Generate("/var/run/example/pidfile").Cleanup()
-
+	defer Generate("./pidfile").Cleanup()
 	// ...
 
 	// Output:

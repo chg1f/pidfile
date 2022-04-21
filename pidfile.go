@@ -7,24 +7,26 @@ import (
 	"sync/atomic"
 )
 
-type Option func() error
-
 type PIDFile struct {
 	inited int32
 	path   string
 }
 
 func New(path string, options ...Option) (*PIDFile, error) {
+	pf := PIDFile{
+		path: path,
+	}
 	for _, option := range options {
-		if err := option(); err != nil {
+		if err := option(&pf); err != nil {
 			return nil, err
 		}
 	}
-	return &PIDFile{
-		path: path,
-	}, nil
+	return &pf, nil
 }
 func (pf *PIDFile) Generate() error {
+	if pf == nil {
+		return nil
+	}
 	if !atomic.CompareAndSwapInt32(&pf.inited, 0, 1) {
 		return errors.New("duplicated")
 	} else if _, err := os.Stat(pf.path); errors.Is(err, os.ErrExist) {
@@ -39,19 +41,21 @@ func (pf *PIDFile) Generate() error {
 	return nil
 }
 func (pf *PIDFile) Cleanup() error {
-	if pf != nil {
-		defer atomic.StoreInt32(&pf.inited, 0)
-		return os.Remove(pf.path)
+	if pf == nil {
+		return nil
 	}
-	return nil
+	defer atomic.StoreInt32(&pf.inited, 0)
+	return os.Remove(pf.path)
 }
+
+type Option func(*PIDFile) error
 
 const (
 	ROOT = 0
 )
 
 func Permission(uid int) Option {
-	return func() error {
+	return func(*PIDFile) error {
 		if os.Getuid() != uid {
 			return errors.New("expect uid:" + strconv.Itoa(uid))
 		}
@@ -59,16 +63,9 @@ func Permission(uid int) Option {
 	}
 }
 
-var (
-	emptyPF *PIDFile
-)
-
 func Generate(path string, options ...Option) interface {
 	Cleanup() error
 } {
-	if path == "" {
-		return emptyPF
-	}
 	c, err := New(path, options...)
 	if err != nil {
 		panic(err)
