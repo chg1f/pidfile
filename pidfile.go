@@ -12,6 +12,11 @@ type PIDFile struct {
 	path   string
 }
 
+var (
+	ErrDuplicated = errors.New("duplicated")
+	ErrFileExists = errors.New("file exists")
+)
+
 func New(path string, options ...Option) (*PIDFile, error) {
 	pf := PIDFile{
 		path: path,
@@ -28,9 +33,9 @@ func (pf *PIDFile) Generate() error {
 		return nil
 	}
 	if !atomic.CompareAndSwapInt32(&pf.inited, 0, 1) {
-		return errors.New("duplicated")
-	} else if _, err := os.Stat(pf.path); errors.Is(err, os.ErrExist) {
-		return os.ErrExist
+		return ErrDuplicated
+	} else if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
+		return ErrFileExists
 	}
 	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
