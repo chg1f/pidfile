@@ -17,12 +17,12 @@ var (
 	ErrFileExists = errors.New("file exists")
 )
 
-func New(path string, options ...Option) (*PIDFile, error) {
+func New(path string, constrants ...Constrant) (*PIDFile, error) {
 	pf := PIDFile{
 		path: path,
 	}
-	for _, option := range options {
-		if err := option(&pf); err != nil {
+	for _, constrant := range constrants {
+		if err := constrant(); err != nil {
 			return nil, err
 		}
 	}
@@ -53,14 +53,14 @@ func (pf *PIDFile) Cleanup() error {
 	return os.Remove(pf.path)
 }
 
-type Option func(*PIDFile) error
+type Constrant func() error
 
 const (
 	ROOT = 0
 )
 
-func Permission(uid int) Option {
-	return func(*PIDFile) error {
+func Permission(uid int) Constrant {
+	return func() error {
 		if os.Getuid() != uid {
 			return errors.New("expect uid:" + strconv.Itoa(uid))
 		}
@@ -68,10 +68,10 @@ func Permission(uid int) Option {
 	}
 }
 
-func Generate(path string, options ...Option) interface {
+func Generate(path string, constrants ...Constrant) interface {
 	Cleanup() error
 } {
-	c, err := New(path, options...)
+	c, err := New(path, constrants...)
 	if err != nil {
 		panic(err)
 	}
