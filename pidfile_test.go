@@ -10,7 +10,7 @@ import (
 )
 
 func TestPIDFile(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "pidfile")
+	path := filepath.Join(os.TempDir(), "example/pidfile")
 	c, err := New(path)
 	if err != nil {
 		t.Error(err)
@@ -101,7 +101,7 @@ func ExamplePIDFile() {
 }
 
 func TestGenerate(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "pidfile")
+	path := filepath.Join(os.TempDir(), "example/pidfile")
 	c := Generate(path)
 	f, err := os.Open(path)
 	if err != nil {

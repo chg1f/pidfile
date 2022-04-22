@@ -3,6 +3,7 @@ package pidfile
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync/atomic"
 )
@@ -34,7 +35,12 @@ func (pf *PIDFile) Generate() error {
 	}
 	if !atomic.CompareAndSwapInt32(&pf.inited, 0, 1) {
 		return ErrDuplicated
-	} else if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
+	}
+	err := os.MkdirAll(filepath.Dir(pf.path), 0755)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
 		return ErrFileExists
 	}
 	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
