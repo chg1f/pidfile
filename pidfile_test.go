@@ -39,6 +39,52 @@ func TestPIDFile(t *testing.T) {
 		t.Error(os.ErrExist)
 	}
 }
+func TestPIDFileExist(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "pidfile")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Error(err)
+	}
+	f.WriteString("0")
+	f.Close()
+	defer os.Remove(path)
+	c, err := New(path)
+	if err != nil {
+		t.Error(err)
+	}
+	err = c.Generate()
+	if !errors.Is(err, ErrFileExists) {
+		t.Error("overwrite")
+	}
+	f, err = os.Open(path)
+	if err != nil {
+		t.Error(err)
+	}
+	defer f.Close()
+	bs, err := io.ReadAll(f)
+	if err != nil {
+		t.Error(err)
+	}
+	if string(bs) != "0" {
+		t.Error("overwrited " + string(bs))
+	}
+}
+func TestPIDFileDuplicated(t *testing.T) {
+	path := filepath.Join(os.TempDir(), "pidfile")
+	c, err := New(path)
+	if err != nil {
+		t.Error(err)
+	}
+	err = c.Generate()
+	if err != nil {
+		t.Error(err)
+	}
+	defer c.Cleanup()
+	err = c.Generate()
+	if !errors.Is(err, ErrDuplicated) {
+		t.Error("duplicated")
+	}
+}
 
 func ExamplePIDFile() {
 	pf, err := New("./pidfile")
