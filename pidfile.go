@@ -19,13 +19,6 @@ type PIDFile struct {
 
 type Constrant func() error
 
-func Must(path string, constrants ...Constrant) *PIDFile {
-	pf, err := New(path, constrants...)
-	if err != nil {
-		panic(err)
-	}
-	return pf
-}
 func New(path string, constrants ...Constrant) (*PIDFile, error) {
 	pf := PIDFile{
 		path: path,
@@ -35,43 +28,35 @@ func New(path string, constrants ...Constrant) (*PIDFile, error) {
 			return nil, err
 		}
 	}
-	return &pf, nil
-}
-func (pf *PIDFile) Generate() (err error) {
-	if pf == nil {
-		return nil
+	err := os.MkdirAll(filepath.Dir(pf.path), 0755)
+	if err != nil {
+		return nil, err
 	}
-	pf.Do(func() {
-		err := os.MkdirAll(filepath.Dir(pf.path), 0755)
-		if err != nil {
-			err = errors.New("mkdir failed: " + err.Error())
-			return
-		}
-		if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
-			err = ErrDuplicated
-			return
-		}
-		f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			err = errors.New("open file failed: " + err.Error())
-			return
-		}
-		defer f.Close()
-		f.WriteString(strconv.Itoa(os.Getpid()))
-	})
-	return
+	if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
+		return nil, ErrDuplicated
+	}
+	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	f.WriteString(strconv.Itoa(os.Getpid()))
+	return &pf, nil
 }
 func (pf *PIDFile) Cleanup() error {
 	if pf == nil {
 		return nil
 	}
-	return os.Remove(pf.path)
+	pf.Do(func() {
+		os.Remove(pf.path)
+	})
+	return nil
 }
 func Generate(path string, constrants ...Constrant) interface {
 	Cleanup() error
 } {
-	pf := Must(path, constrants...)
-	if err := pf.Generate(); err != nil {
+	pf, err := New(path, constrants...)
+	if err != nil {
 		panic(err)
 	}
 	return pf
