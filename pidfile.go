@@ -5,85 +5,74 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync/atomic"
+	"sync"
 )
-
-type PIDFile struct {
-	inited int32
-	path   string
-}
 
 var (
 	ErrDuplicated = errors.New("duplicated")
-	ErrFileExists = errors.New("file exists")
 )
 
+type PIDFile struct {
+	sync.Once
+	path string
+}
+
+type Constrant func() error
+
+func Must(path string, constrants ...Constrant) *PIDFile {
+	pf, err := New(path, constrants...)
+	if err != nil {
+		panic(err)
+	}
+	return pf
+}
 func New(path string, constrants ...Constrant) (*PIDFile, error) {
 	pf := PIDFile{
 		path: path,
 	}
-	for _, constrant := range constrants {
-		if err := constrant(); err != nil {
+	for ix := range constrants {
+		if err := constrants[ix](); err != nil {
 			return nil, err
 		}
 	}
 	return &pf, nil
 }
-func (pf *PIDFile) Generate() error {
+func (pf *PIDFile) Generate() (err error) {
 	if pf == nil {
 		return nil
 	}
-	if !atomic.CompareAndSwapInt32(&pf.inited, 0, 1) {
-		return ErrDuplicated
-	}
-	err := os.MkdirAll(filepath.Dir(pf.path), 0755)
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
-		return ErrFileExists
-	}
-	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	f.WriteString(strconv.Itoa(os.Getpid()))
-	return nil
+	pf.Do(func() {
+		err := os.MkdirAll(filepath.Dir(pf.path), 0755)
+		if err != nil {
+			err = errors.New("mkdir failed: " + err.Error())
+			return
+		}
+		if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
+			err = ErrDuplicated
+			return
+		}
+		f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			err = errors.New("open file failed: " + err.Error())
+			return
+		}
+		defer f.Close()
+		f.WriteString(strconv.Itoa(os.Getpid()))
+	})
+	return
 }
 func (pf *PIDFile) Cleanup() error {
 	if pf == nil {
 		return nil
 	}
-	defer atomic.StoreInt32(&pf.inited, 0)
 	return os.Remove(pf.path)
 }
-
-type Constrant func() error
-
-const (
-	ROOT = 0
-)
-
-func Permission(uid int) Constrant {
-	return func() error {
-		if os.Getuid() != uid {
-			return errors.New("expect uid:" + strconv.Itoa(uid))
-		}
-		return nil
-	}
-}
-
 func Generate(path string, constrants ...Constrant) interface {
 	Cleanup() error
 } {
-	c, err := New(path, constrants...)
-	if err != nil {
+	pf := Must(path, constrants...)
+	if err := pf.Generate(); err != nil {
 		panic(err)
 	}
-	err = c.Generate()
-	if err != nil {
-		panic(err)
-	}
-	return c
+	return pf
 }
