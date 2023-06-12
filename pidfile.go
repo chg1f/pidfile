@@ -5,59 +5,67 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
+	"sync/atomic"
 )
 
 var (
+	ErrNoPIDFile  = errors.New("no pidfile")
 	ErrDuplicated = errors.New("duplicated")
 )
 
+type Constrant func() error
 type PIDFile struct {
-	sync.Once
+	generate int32
+	cleanup  int32
+
 	path string
+	cons []Constrant
 }
 
-type Constrant func() error
-
-func New(path string, constrants ...Constrant) (*PIDFile, error) {
-	pf := PIDFile{
+func Generate(path string, cons ...Constrant) interface{ Cleanup() error } {
+	return New(path, cons...).Generate()
+}
+func New(path string, cons ...Constrant) *PIDFile {
+	return &PIDFile{
 		path: path,
+		cons: cons,
+
+		cleanup: 1,
 	}
-	for ix := range constrants {
-		if err := constrants[ix](); err != nil {
-			return nil, err
+}
+func (pf *PIDFile) Generate() interface{ Cleanup() error } {
+	if pf == nil {
+		panic(ErrNoPIDFile)
+	}
+	if atomic.CompareAndSwapInt32(&pf.generate, 0, 1) {
+		for ix := range pf.cons {
+			if err := pf.cons[ix](); err != nil {
+				panic(err)
+			}
 		}
+		err := os.MkdirAll(filepath.Dir(pf.path), 0755)
+		if err != nil {
+			panic(err)
+		}
+		if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
+			panic(ErrDuplicated)
+		}
+		f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		f.WriteString(strconv.Itoa(os.Getpid()))
+		atomic.StoreInt32(&pf.cleanup, 0)
 	}
-	err := os.MkdirAll(filepath.Dir(pf.path), 0755)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
-		return nil, ErrDuplicated
-	}
-	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	f.WriteString(strconv.Itoa(os.Getpid()))
-	return &pf, nil
+	return pf
 }
 func (pf *PIDFile) Cleanup() error {
 	if pf == nil {
-		return nil
+		return ErrNoPIDFile
 	}
-	pf.Do(func() {
-		os.Remove(pf.path)
-	})
-	return nil
-}
-func Generate(path string, constrants ...Constrant) interface {
-	Cleanup() error
-} {
-	pf, err := New(path, constrants...)
-	if err != nil {
-		panic(err)
+	if atomic.LoadInt32(&pf.generate) == 1 && atomic.CompareAndSwapInt32(&pf.cleanup, 0, 1) {
+		return os.Remove(pf.path)
 	}
-	return pf
+	return ErrNoPIDFile
 }

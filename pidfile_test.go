@@ -9,21 +9,32 @@ import (
 )
 
 func TestPIDFile(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "test.pid")
-	pf, err := New(path)
-	assert.NoError(t, err)
-	assert.NotNil(t, pf)
+	var (
+		path = filepath.Join(os.TempDir(), "test.pid")
+		pf1  = New(path)
+		pf2  = New(path)
+	)
+	assert.NotNil(t, pf1)
+	assert.NotNil(t, pf2)
+	assert.NotPanics(t, func() { pf1.Generate() })
+	assert.Panics(t, func() { pf2.Generate() })
 	assert.FileExists(t, path)
-	pf.Cleanup()
+	assert.NoError(t, pf1.Cleanup())
+	assert.Error(t, pf2.Cleanup())
 	assert.NoFileExists(t, path)
 }
 
-func ExamplePIDFile() {
-	pf, err := New("./test.pid")
-	if err != nil {
-		panic(err)
-	}
-	defer pf.Cleanup()
+func ExamplePIDFile_1() {
+	defer Generate("./test.pid").Cleanup()
+	// ...
+
+	// Output:
+}
+func ExamplePIDFile_2() {
+	var (
+		pf = New("./test.pid")
+	)
+	defer pf.Generate().Cleanup()
 	// ...
 
 	// Output:
