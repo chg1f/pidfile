@@ -22,6 +22,18 @@ func TestPIDFile(t *testing.T) {
 	assert.NoError(t, pf1.Cleanup())
 	assert.Error(t, pf2.Cleanup())
 	assert.NoFileExists(t, path)
+	var (
+		pf3 = New("")
+		pf4 = New("")
+	)
+	assert.NotNil(t, pf3)
+	assert.NotNil(t, pf4)
+	assert.NotPanics(t, func() { pf3.Generate() })
+	assert.NoError(t, pf3.Cleanup())
+	RaiseEmptyPath = true
+	assert.Panics(t, func() { pf4.Generate() })
+	assert.Error(t, pf2.Cleanup())
+	assert.NoFileExists(t, path)
 }
 
 func ExamplePIDFile_1() {
