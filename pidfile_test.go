@@ -8,46 +8,32 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPIDFile(t *testing.T) {
+func TestGenerate(t *testing.T) {
 	var (
-		path = filepath.Join(os.TempDir(), "test.pid")
-		pf1  = New(path)
-		pf2  = New(path)
+		path      = filepath.Join(os.TempDir(), "test.pid")
+		cleanable Cleanable
 	)
-	assert.NotNil(t, pf1)
-	assert.NotNil(t, pf2)
-	assert.NotPanics(t, func() { pf1.Generate() })
-	assert.Panics(t, func() { pf2.Generate() })
-	assert.FileExists(t, path)
-	assert.NoError(t, pf1.Cleanup())
-	assert.Error(t, pf2.Cleanup())
 	assert.NoFileExists(t, path)
+	assert.NotPanics(t, func() { cleanable = Generate(path) })
+	assert.FileExists(t, path)
+	assert.NotNil(t, cleanable)
+	assert.NotPanics(t, func() { cleanable.Cleanup() })
+	assert.NoFileExists(t, path)
+}
+func TestGenerateEmptyPath(t *testing.T) {
 	var (
-		pf3 = New("")
-		pf4 = New("")
+		path      = ""
+		cleanable Cleanable
 	)
-	assert.NotNil(t, pf3)
-	assert.NotNil(t, pf4)
-	assert.NotPanics(t, func() { pf3.Generate() })
-	assert.NoError(t, pf3.Cleanup())
-	RaiseEmptyPath = true
-	assert.Panics(t, func() { pf4.Generate() })
-	assert.Error(t, pf2.Cleanup())
+	assert.NoFileExists(t, path)
+	assert.NotPanics(t, func() { cleanable = Generate(path) })
+	assert.NoFileExists(t, path)
+	assert.NotNil(t, cleanable)
+	assert.NotPanics(t, func() { cleanable.Cleanup() })
 	assert.NoFileExists(t, path)
 }
 
-func ExamplePIDFile_1() {
+func ExamplePidfile() {
 	defer Generate("./test.pid").Cleanup()
 	// ...
-
-	// Output:
-}
-func ExamplePIDFile_2() {
-	var (
-		pf = New("./test.pid")
-	)
-	defer pf.Generate().Cleanup()
-	// ...
-
-	// Output:
 }
