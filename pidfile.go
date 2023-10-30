@@ -2,80 +2,82 @@ package pidfile
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 )
 
-var (
-	ErrDuplicated = errors.New("duplicated")
-)
+type Option func(*Pidfile) error
 
-type Cleanable interface{ Cleanup() error }
-
-func Generate(path string, conflicts ...func() error) Cleanable {
-	pf := &pidfile{path: path}
-	return pf.Generate(conflicts...)
-}
-
-type pidfile struct {
-	path string
-	once sync.Once
-}
-
-func (pf *pidfile) Generate(conflicts ...func() error) Cleanable {
-	if pf == nil || pf.path == "" {
-		return nil
+func NotEmpty(pf *Pidfile) error {
+	if pf.path == "" {
+		return errors.New("empty")
 	}
-	for ix := range conflicts {
-		if err := conflicts[ix](); err != nil {
-			panic(err)
+	return nil
+}
+
+type Pidfile struct {
+	path string
+	pid  int
+}
+
+func (pf *Pidfile) Path() string {
+	return pf.path
+}
+
+func New(path string) *Pidfile {
+	return &Pidfile{
+		path: path,
+		pid:  os.Getpid(),
+	}
+}
+func (pf *Pidfile) Generate(opts ...Option) error {
+	for ix := range opts {
+		if err := opts[ix](pf); err != nil {
+			return err
 		}
 	}
-	err := os.MkdirAll(filepath.Dir(pf.path), 0755)
-	if err != nil {
-		panic(err)
-	}
-	if _, err := os.Stat(pf.path); !errors.Is(err, os.ErrNotExist) {
-		f, err := os.Open(pf.path)
+	if pf.path != "" {
+		if err := os.MkdirAll(filepath.Dir(pf.path), 0755); err != nil {
+			return err
+		}
+		if _, err := os.Stat(pf.path); err == nil {
+			return errors.New("file exists")
+		}
+		f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		defer f.Close()
-		bs, err := io.ReadAll(f)
-		if err != nil {
-			panic(err)
+		if _, err := f.WriteString(strconv.Itoa(pf.pid)); err != nil {
+			return err
 		}
-		if strconv.Itoa(os.Getpid()) == string(bs) {
-			return pf
-		}
-		panic(ErrDuplicated)
 	}
-	f, err := os.OpenFile(pf.path, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	f.WriteString(strconv.Itoa(os.Getpid()))
-	return pf
+	return nil
 }
-func (pf *pidfile) Cleanup() error {
-	if pf == nil || pf.path == "" {
-		return nil
+func (pf *Pidfile) Cleanup() {
+	if pf.path == "" {
+		return
 	}
-	f, err := os.Open(pf.path)
+	bs, err := os.ReadFile(pf.path)
 	if err != nil {
 		panic(err)
 	}
-	defer f.Close()
-	bs, err := io.ReadAll(f)
-	if err != nil {
+	if strconv.Itoa(pf.pid) != string(bs) {
+		return
+	}
+	if err := os.Remove(pf.path); err != nil {
 		panic(err)
 	}
-	if strconv.Itoa(os.Getpid()) != string(bs) {
-		return nil
+	return
+}
+
+type Cleanable interface{ Cleanup() }
+
+func Generate(path string, opts ...Option) Cleanable {
+	pf := New(path)
+	if err := pf.Generate(opts...); err != nil {
+		panic(err)
 	}
-	return os.Remove(pf.path)
+	return pf
 }
