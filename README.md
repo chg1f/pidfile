@@ -1,11 +1,10 @@
-PIDFile
----
+## Pidfile
 
 ![test workflow](https://github.com/chg1f/pidfile/actions/workflows/test.yml/badge.svg?branch=master)
 
 ## Intro
 
-Handle golang pidfile generate and cleanup
+Easily generate and cleanup golang programs pidfile
 
 ## Quick Start
 
