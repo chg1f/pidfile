@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGenerate(t *testing.T) {
-	var pf Cleanable
+func TestPidfile(t *testing.T) {
+	var pf interface{ Cleanup() }
 	path := filepath.Join(os.TempDir(), strconv.FormatInt(time.Now().UnixNano(), 10)+".pid")
 	assert.NoFileExists(t, path)
-	assert.NotPanics(t, func() { pf = Generate(path) })
+	assert.NotPanics(t, func() { pf = Generate(Path(path)) })
 	assert.FileExists(t, path)
 	assert.NotNil(t, pf)
 	bs, err := os.ReadFile(path)
@@ -23,21 +23,8 @@ func TestGenerate(t *testing.T) {
 	assert.NotPanics(t, func() { pf.Cleanup() })
 	assert.NoFileExists(t, path)
 }
-func TestGenerateEmpty(t *testing.T) {
-	var pf Cleanable
-	path := ""
-	assert.NotPanics(t, func() { pf = Generate(path) })
-	assert.NotNil(t, pf)
-	assert.NotPanics(t, func() { pf.Cleanup() })
-}
-func TestGenerateNotEmpty(t *testing.T) {
-	var pf Cleanable
-	path := ""
-	assert.Panics(t, func() { pf = Generate(path, NotEmpty) })
-	assert.Nil(t, pf)
-}
 
 func ExampleGenerate() {
-	defer Generate("example.pid").Cleanup()
+	defer Generate().Cleanup()
 	// ...
 }
